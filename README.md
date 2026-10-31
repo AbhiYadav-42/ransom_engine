@@ -43,3 +43,47 @@ Suppressed alerts return `suppressed=True`. The engine must still log the underl
 - When several alerts arrive at almost the same instant, Serpantinum may show only one popup. Each alert sent on its own shows normally. This is the notification server's display behavior, not a bug in `send_alert()`.
 - Each severity has its own rate-limit timer, so a `normal` alert never blocks a `critical` one.
 - Titles that start with `-` are passed safely because the command uses `--` before the title.
+
+
+
+## Stage 2: Behavioral file sensor
+
+`engine/sensor.py` watches sandbox folders with `watchdog` (inotify on Linux,
+ReadDirectoryChangesW on Windows) and puts one `SensorEvent` per filesystem
+event on a `queue.Queue`. It does **no** aggregation, entropy, ML, killing or alerting.
+
+### SensorEvent
+| field | meaning |
+|---|---|
+| `timestamp` | `time.monotonic()` when the handler saw the event |
+| `event_type` | `created`, `modified`, `moved`, `deleted` |
+| `src_path` | path as reported by watchdog |
+| `dest_path` | only for `moved`, else `None` |
+| `is_directory` | True for folders |
+| `extension_changed` | for file moves: last suffix differs (case-insensitive) |
+
+### What is dropped / kept
+- **Dropped:** `modified` for the same path less than `dedup_window` s (default 0.25) after the last *kept* `modified` for it; directory `modified` events (switchable); anything inside an ignored folder (for a move, if either end is ignored).
+- **Kept:** the first `modified`, later ones after the window, `modified` for other paths, and **all** `created` / `moved` / `deleted`.
+- Counters in `sensor.get_stats()` show how many events were dropped and why.
+
+### Known limitations (honest list)
+- **No process ID.** watchdog does not provide one; attribution comes later via psutil.
+- **Events can be lost** if the OS event buffer overflows during huge bursts. Callbacks are kept tiny to reduce this, but it cannot be eliminated. Linux limit: `/proc/sys/fs/inotify/max_queued_events`.
+- One real action can produce several events; behaviour differs between OSes and watchdog versions.
+- A file moved out of the watched tree appears as `deleted`; moved in appears as `created`.
+
+### Windows notes (UNTESTED on real Windows)
+- Keep the sandbox **outside OneDrive** (sync can lock/touch files and create extra events).
+- Windows Defender may scan sandbox files. If it interferes, exclude **only the sandbox folder**
+  (PowerShell as Administrator): `Add-MpPreference -ExclusionPath "C:\sandbox"`.
+  Remove later with `Remove-MpPreference -ExclusionPath "C:\sandbox"`.
+- Files can be locked by other programs; `is_file_locked()` in `engine/sensor_windows.py` is a hint for later stages.
+- Paths are compared with `PureWindowsPath` (case-insensitive, `/` and `\` equal).
+
+### Run
+```bash
+pip install -r requirements.txt
+python -m pytest tests/ -v            # always point pytest at tests/
+python sim/test_sensor.py             # live demo; generate events from a 2nd terminal
+```
