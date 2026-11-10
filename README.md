@@ -51,7 +51,7 @@ Suppressed alerts return `suppressed=True`. The engine must still log the underl
 
 
 
-## Stage 2: Behavioral file sensor
+# Stage 2: Behavioral file sensor
 
 `engine/sensor.py` watches sandbox folders with `watchdog` (inotify on Linux,
 ReadDirectoryChangesW on Windows) and puts one `SensorEvent` per filesystem
@@ -94,7 +94,7 @@ python sim/test_sensor.py             # live demo; generate events from a 2nd te
 ```
 
 
-## Stage 3: Temporal aggregator
+# Stage 3: Temporal aggregator
 
 `engine/aggregator.py` reads Stage 2's `SensorEvent` queue, keeps 1 s and 5 s sliding
 windows, and every tick (default 1 s) emits one `FeatureRow` (timestamp, source_key,
