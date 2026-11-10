@@ -2,12 +2,6 @@
 
 **RansomGuard** is a lightweight, cross-platform behavioral security engine designed to detect and mitigate active ransomware attacks in real time. Running entirely offline on local CPU architectures, the system captures filesystem metadata stream anomalies, fuses them into rolling temporal metrics, and utilizes a local machine learning classifier to forcefully terminate malicious cryptographic processes before widespread data loss occurs. 
 
-Developed as a final-year academic project for the Department of Computer Applications (BCA), ITM University, Gwalior (Academic Year 2026-27).
-* **Development Team:** Abhi Yadav & Partner
-* **Project Guide:** Shashikant Gupta
-* **Target Support Matrix:** Arch Linux (Hyprland WM / systemd daemons) & Windows 10/11 (NTFS / Service Control Manager)
-
-
 
 # RansomGuard: Stage 1 (desktop alerts)
 
