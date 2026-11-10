@@ -87,3 +87,50 @@ pip install -r requirements.txt
 python -m pytest tests/ -v            # always point pytest at tests/
 python sim/test_sensor.py             # live demo; generate events from a 2nd terminal
 ```
+
+
+## Stage 3: Temporal aggregator
+
+`engine/aggregator.py` reads Stage 2's `SensorEvent` queue, keeps 1 s and 5 s sliding
+windows, and every tick (default 1 s) emits one `FeatureRow` (timestamp, source_key,
+values in the exact order of `engine/features_schema.py::FEATURE_NAMES`).
+It does **no** entropy, ML, process killing or alerting.
+
+### The column contract (`engine/features_schema.py`)
+Column ORDER is the contract: a trained model trusts position. Never reorder, rename or
+insert; add new features at the END, change `SCHEMA_VERSION`, tell your partner, retrain.
+Compare `schema_fingerprint()` on both machines.
+
+| Feature | Definition |
+|---|---|
+| events_per_sec_1s / _5s | events in the window / window length |
+| distinct_files_modified | distinct file paths with a `modified` event (5 s) |
+| distinct_dirs_touched | distinct parent folders of events, move destinations included (5 s) |
+| rename_count | `moved` events on files (5 s) |
+| extension_change_count | file moves whose extension changed (5 s) |
+| modify_ratio | modified events / all events (5 s), 0 when none |
+| canary_touched, backup_kill_cmd | placeholders, always 0 until later stages |
+
+### Things to know
+- Numbers are computed from what Stage 2 delivers: repeated `modified` events are de-duplicated,
+  directory-modified events are skipped, ignored folders never arrive. Each new file is ~2 events
+  (created + modified). Changing Stage 2 settings changes the features: retrain.
+- Memory is bounded: each window is capped (default 20,000 events/s). In a huge burst the oldest
+  records are evicted, rates saturate and distinct counts under-count. Counters are in `get_stats()`.
+- Source keys: everything feeds `"global"`; an optional `extra_key_func(event)` adds a second key
+  (a folder now, a PID in Stage 5).
+- CSV (`--csv`): the header comes from `FEATURE_NAMES`; an existing file with a different header is
+  refused. Keep the CSV **outside** the watched sandbox. `data/` is git-ignored.
+
+### Windows notes (UNTESTED on real Windows)
+- `time.monotonic()` may be coarse (about 15 ms on some versions); the sim prints the reported resolution.
+- Paths are compared with Windows rules (case-insensitive, `\`) via `aggregator_windows.py`.
+- Do not keep the CSV open in Excel while collecting (it locks the file; the runner counts `csv_errors`).
+- Same columns on both OSes does not guarantee the same values: compare rows for the same simulated
+  activity on both before trusting a Linux-trained model on Windows.
+
+### Run
+```bash
+python -m pytest tests/ -q
+python sim/test_aggregator.py --csv data/features.csv
+```
