@@ -24,7 +24,34 @@ def test_feature_names_are_in_the_agreed_order():
         "modify_ratio",
         "canary_touched",
         "backup_kill_cmd",
+        "files_inspected",
+        "max_entropy",
+        "mean_entropy",
+        "fraction_high_entropy",
+        "mean_chi_square",
+        "max_null_fraction",
+        "header_mismatch_count",
+        "entropy_jump_count",
     )
+
+
+def test_first_nine_columns_are_unchanged_since_schema_1_0():
+    # New features may only be APPENDED. These nine must never move.
+    assert FEATURE_NAMES[:9] == (
+        "events_per_sec_1s",
+        "events_per_sec_5s",
+        "distinct_files_modified",
+        "distinct_dirs_touched",
+        "rename_count",
+        "extension_change_count",
+        "modify_ratio",
+        "canary_touched",
+        "backup_kill_cmd",
+    )
+
+
+def test_schema_version_is_1_1():
+    assert SCHEMA_VERSION == "1.1"
 
 
 def test_feature_names_have_no_duplicates():
