@@ -26,7 +26,9 @@ from engine.sensor import FileSensor  # noqa: E402
 
 # Short column titles, same order as FEATURE_NAMES.
 COLUMN_LABELS = ["eps_1s", "eps_5s", "files_mod", "dirs", "renames",
-                 "ext_chg", "mod_ratio", "canary", "bkp_kill"]
+                 "ext_chg", "mod_ratio", "canary", "bkp_kill",
+                 "inspected", "max_ent", "mean_ent", "frac_hi",
+                 "mean_chi2", "max_null", "hdr_mis", "ent_jump"]
 assert len(COLUMN_LABELS) == len(FEATURE_NAMES), "update COLUMN_LABELS to match the schema"
 
 
