@@ -12,6 +12,8 @@ import pytest
 from engine.aggregator import Aggregator, AggregatorRunner, csv_header
 from engine.features_schema import FEATURE_NAMES, FeatureSchemaError
 from engine.sensor import SensorEvent
+from engine.inspection_worker import InspectionResult
+from engine.inspector import FileInspection
 
 WAIT_SECONDS = 10.0
 TICK = 0.05
@@ -122,3 +124,44 @@ def test_runner_refuses_a_csv_with_the_wrong_header(tmp_path):
     with pytest.raises(FeatureSchemaError):
         runner.start()
     assert runner.is_running() is False
+
+
+
+INSPECTED = FEATURE_NAMES.index("files_inspected")
+
+
+def test_runner_feeds_the_inspection_queue_into_rows():
+    input_queue = queue.Queue()
+    inspection_queue = queue.Queue()
+    runner = AggregatorRunner(Aggregator(windows_style=False), input_queue,
+                              tick_seconds=TICK, inspection_queue=inspection_queue)
+    runner.start()
+    try:
+        event = real_event("modified", "/sb/a.bin")
+        inspection = FileInspection(path="/sb/a.bin", status="ok", timestamp=time.monotonic(),
+                                    bytes_sampled=65536, entropy=7.9, chi_square=255.0,
+                                    null_fraction=0.004)
+        inspection_queue.put(InspectionResult(event, inspection))
+        rows = collect_rows(runner.output_queue,
+                            lambda found: any(r.values[INSPECTED] >= 1 for r in found))
+    finally:
+        finished = runner.stop()
+    assert any(r.values[INSPECTED] >= 1 for r in rows)
+    assert finished is True
+
+
+def test_runner_calls_the_event_hook_for_every_event():
+    input_queue = queue.Queue()
+    seen = []
+    runner = AggregatorRunner(Aggregator(windows_style=False), input_queue,
+                              tick_seconds=TICK, event_hook=seen.append)
+    runner.start()
+    try:
+        for i in range(3):
+            input_queue.put(real_event("created", "/sb/f%d.txt" % i))
+        deadline = time.monotonic() + WAIT_SECONDS
+        while time.monotonic() < deadline and len(seen) < 3:
+            time.sleep(0.05)
+    finally:
+        runner.stop()
+    assert len(seen) == 3
