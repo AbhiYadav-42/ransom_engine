@@ -14,6 +14,7 @@ from engine.aggregator import (
 from engine.aggregator_windows import describe_monotonic_clock, split_for_counting
 from engine.features_schema import FEATURE_NAMES, FeatureSchemaError
 from engine.sensor import SensorEvent
+from engine.inspector import FileInspection
 
 ZEROS = [0.0] * len(FEATURE_NAMES)
 
@@ -350,3 +351,108 @@ def test_csv_writer_refuses_a_mismatched_header(tmp_path):
     with pytest.raises(FeatureSchemaError):
         FeatureCsvWriter(path).open()
     assert path.read_text() == "a,b,c\n1,2,3\n"      # untouched
+
+# ----- Stage 4: inspection features ----------------------------------------
+def make_inspection(timestamp, entropy=7.9, chi_square=255.0, null_fraction=0.004,
+                    ext_matches_header=1, entropy_delta=0.0, had_previous_entropy=False,
+                    status="ok", path="/sb/a.bin"):
+    return FileInspection(path=path, status=status, timestamp=timestamp, bytes_sampled=65536,
+                          entropy=entropy, chi_square=chi_square, null_fraction=null_fraction,
+                          ext_matches_header=ext_matches_header, entropy_delta=entropy_delta,
+                          had_previous_entropy=had_previous_entropy)
+
+
+def feed_inspections(agg, inspections, path="/sb/a.bin"):
+    for inspection in inspections:
+        agg.process_inspection(make_event(inspection.timestamp, "modified", path), inspection)
+
+
+def test_inspection_features_summarize_measured_files():
+    agg = make_aggregator()
+    feed_inspections(agg, [make_inspection(9.5, entropy=7.9),
+                           make_inspection(9.5, entropy=4.0),
+                           make_inspection(9.5, entropy=6.0)])
+    row = agg.compute_features(10.0)
+    assert feature(row, "files_inspected") == 3
+    assert feature(row, "max_entropy") == pytest.approx(7.9)
+    assert feature(row, "mean_entropy") == pytest.approx(17.9 / 3)
+
+
+def test_fraction_high_entropy_uses_the_threshold():
+    inspections = [make_inspection(9.5, entropy=7.9), make_inspection(9.5, entropy=7.6),
+                   make_inspection(9.5, entropy=4.0)]
+    default_agg = make_aggregator()                                  # threshold 7.5
+    feed_inspections(default_agg, inspections)
+    assert feature(default_agg.compute_features(10.0), "fraction_high_entropy") == pytest.approx(2 / 3)
+    strict_agg = make_aggregator(high_entropy_threshold=7.7)
+    feed_inspections(strict_agg, inspections)
+    assert feature(strict_agg.compute_features(10.0), "fraction_high_entropy") == pytest.approx(1 / 3)
+
+
+def test_mean_chi_square_is_clipped():
+    agg = make_aggregator()
+    feed_inspections(agg, [make_inspection(9.5, chi_square=16711680.0),    # 64 KB of zeros
+                           make_inspection(9.5, chi_square=255.0)])
+    row = agg.compute_features(10.0)
+    assert feature(row, "mean_chi_square") == pytest.approx((10000.0 + 255.0) / 2)
+
+
+def test_max_null_fraction():
+    agg = make_aggregator()
+    feed_inspections(agg, [make_inspection(9.5, null_fraction=0.1),
+                           make_inspection(9.5, null_fraction=0.9),
+                           make_inspection(9.5, null_fraction=0.5)])
+    assert feature(agg.compute_features(10.0), "max_null_fraction") == pytest.approx(0.9)
+
+
+def test_header_mismatch_count():
+    agg = make_aggregator()
+    feed_inspections(agg, [make_inspection(9.5, ext_matches_header=0),
+                           make_inspection(9.5, ext_matches_header=1),
+                           make_inspection(9.5, ext_matches_header=0)])
+    assert feature(agg.compute_features(10.0), "header_mismatch_count") == 2
+
+
+def test_entropy_jump_count_needs_a_previous_value():
+    agg = make_aggregator()
+    feed_inspections(agg, [
+        make_inspection(9.5, entropy_delta=3.0, had_previous_entropy=True),    # jump
+        make_inspection(9.5, entropy_delta=1.0, had_previous_entropy=True),    # too small
+        make_inspection(9.5, entropy_delta=5.0, had_previous_entropy=False),   # no "before": not a jump
+        make_inspection(9.5, entropy_delta=2.0, had_previous_entropy=True),    # exactly the threshold
+    ])
+    assert feature(agg.compute_features(10.0), "entropy_jump_count") == 2
+
+
+def test_files_that_could_not_be_measured_are_ignored():
+    agg = make_aggregator()
+    feed_inspections(agg, [make_inspection(9.5, status="locked"),
+                           make_inspection(9.5, status="missing"),
+                           make_inspection(9.5, status="too_small")])
+    row = agg.compute_features(10.0)
+    assert feature(row, "files_inspected") == 0
+    assert feature(row, "max_entropy") == 0.0
+    assert agg.get_stats()["inspections_processed"] == 0
+
+
+def test_inspections_age_out_after_five_seconds():
+    agg = make_aggregator()
+    feed_inspections(agg, [make_inspection(0.0)])
+    assert feature(agg.compute_features(4.9), "files_inspected") == 1
+    assert feature(agg.compute_features(5.0), "files_inspected") == 0
+
+
+def test_inspection_features_follow_the_extra_key():
+    agg = make_aggregator(extra_key_func=key_by_first_folder)
+    event = make_event(0.5, "modified", "/alpha/a.bin")
+    agg.process_inspection(event, make_inspection(0.5, path="/alpha/a.bin"))
+    assert feature(agg.compute_features(1.0), "files_inspected") == 1
+    assert feature(agg.compute_features(1.0, "src:alpha"), "files_inspected") == 1
+    assert feature(agg.compute_features(1.0, "src:beta"), "files_inspected") == 0
+
+
+def test_inspection_stats_count_processed_files():
+    agg = make_aggregator()
+    feed_inspections(agg, [make_inspection(0.5), make_inspection(0.5),
+                           make_inspection(0.5, status="locked")])
+    assert agg.get_stats()["inspections_processed"] == 2
