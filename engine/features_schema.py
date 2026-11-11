@@ -8,12 +8,19 @@ wrong numbers. So:
       the other partner.
     * New features go at the END, and SCHEMA_VERSION changes.
     * Both Windows and Linux import this file, so they cannot disagree.
+
+Version history
+    1.0  9 columns (Stage 3: velocity / rename features + 2 placeholders).
+    1.1  +8 columns at the END (Stage 4: binary inspection features).
+         The first 9 columns are unchanged: same positions, same meaning.
+         A model trained on 1.0 cannot read 1.1 rows (17 values instead of 9)
+         unless you slice the first 9; a model trained on 1.1 needs 1.1 rows.
 """
 
 import hashlib
 import math
 
-SCHEMA_VERSION = "1.0"
+SCHEMA_VERSION = "1.1"
 
 FEATURE_NAMES = (
     "events_per_sec_1s",
@@ -25,6 +32,15 @@ FEATURE_NAMES = (
     "modify_ratio",
     "canary_touched",     # placeholder: always 0 until a later stage fills it
     "backup_kill_cmd",    # placeholder: always 0 until a later stage fills it
+    # --- added in schema 1.1 (Stage 4), 5-second window over inspected files ---
+    "files_inspected",
+    "max_entropy",
+    "mean_entropy",
+    "fraction_high_entropy",
+    "mean_chi_square",
+    "max_null_fraction",
+    "header_mismatch_count",
+    "entropy_jump_count",
 )
 
 
