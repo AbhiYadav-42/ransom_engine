@@ -139,3 +139,36 @@ Compare `schema_fingerprint()` on both machines.
 python -m pytest tests/ -q
 python sim/test_aggregator.py --csv data/features.csv
 ```
+
+# Stage 4: Binary inspection engine
+
+`engine/inspector.py` opens the first 64 KB of a file and measures: Shannon entropy,
+chi-square (255 degrees of freedom, about 255 for random data), null-byte fraction,
+per-block entropy (max/min/std), and a magic-header vs extension check. An `Inspector` keeps a
+bounded (LRU, 5000 paths) cache of the last entropy per path for `entropy_delta`.
+`engine/inspection_worker.py` does the reading in its own thread (bounded queue, 50 files per
+tick, 0.3 s settle delay); nothing reads files inside the watchdog callback or the aggregator tick.
+
+### Schema 1.1 (8 columns appended; the first 9 are unchanged)
+files_inspected, max_entropy, mean_entropy, fraction_high_entropy (>= 7.5 bits),
+mean_chi_square (each file clipped at 10,000), max_null_fraction, header_mismatch_count,
+entropy_jump_count (rise >= 2.0 bits since the last inspection). All use the 5 s window and are 0
+when nothing was inspected (`files_inspected` tells you which case it is).
+
+**Partner checklist:** `git pull`, `pip install -r requirements.txt`, run the tests, compare
+`schema_fingerprint()` with the other machine, move any old `data/features.csv` aside
+(its 1.0 header is refused by the CSV writer), re-collect data. Old 1.0 rows stay valid 1.0 data;
+do not pad them with zeros.
+
+### Honest limitations
+- Entropy and chi-square look near-random for zip, jpg, png, docx and pdf data AND for encrypted
+  data; alone they cannot separate them. The header/extension check and fusion with the velocity
+  features (in the ML stage) are what reduce false positives.
+- Entropy and chi-square on tiny files (under about 1 KB) are unreliable: status `too_small`, no numbers.
+- Only the first 64 KB is read; tampering later in a large file can be missed.
+- Under a burst some files are skipped (counted in `skipped_queue_full` / `skipped_budget`).
+- Locked / deleted-mid-scan files give no measurement (counted in `status_*`).
+
+### Windows notes (UNTESTED on real Windows)
+- `open_binary_with_retry` (in `inspector_windows.py`) retries ONCE after 50 ms on PermissionError.
+- numpy must be installed (`pip install -r requirements.txt`); results may differ slightly by numpy/Python version.
