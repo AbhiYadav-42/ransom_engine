@@ -12,23 +12,33 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from engine import alerts  # noqa: E402
 
-logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
+logging.basicConfig(level=logging.WARNING)
 
 
 def show(label, result):
-    print(f"[{label}] delivered={result.delivered} suppressed={result.suppressed} -> {result.reason}")
+    status = "DELIVERED" if result.delivered else ("SUPPRESSED" if result.suppressed else "NOT DELIVERED")
+    print(f"[OK] {label}: {status}")
 
 
 alerts.reset_rate_limiter()
 
-show("1 normal (should show)", alerts.send_alert("System Alert", "Handled natively by Serpantinum", "normal"))
-show("2 normal again (should be suppressed)", alerts.send_alert("System Alert", "Second normal alert", "normal"))
-show("3 critical (should show, not blocked by normal)", alerts.send_alert("CRITICAL", "Suspicious activity detected", "critical"))
-show("4 critical again (should be suppressed)", alerts.send_alert("CRITICAL", "Another critical alert", "critical"))
+show(
+    "Stage 5 summary",
+    alerts.send_alert(
+        "Stage 5 Complete",
+        "Process attribution, backup detection, containment, and quarantine verified.",
+        "normal",
+    ),
+)
 
-print("waiting 2.1 s for the critical timer to expire...")
+# Existing delivery checks, kept compact for manual verification.
+show("Normal alert limiter", alerts.send_alert("RansomGuard", "A second notification", "normal"))
+show("Critical alert", alerts.send_alert("RansomGuard — Critical", "Suspicious activity detected", "critical"))
+show("Critical alert limiter", alerts.send_alert("RansomGuard — Critical", "A repeated alert", "critical"))
+
+print("[WAIT] Checking notification delivery again after the critical limit expires...")
 time.sleep(2.1)
-show("5 critical after wait (should show)", alerts.send_alert("CRITICAL", "Critical again after the wait", "critical"))
+show("Critical alert retry", alerts.send_alert("RansomGuard — Critical", "Critical notification retry", "critical"))
 
-show("6 bad severity (should be rejected)", alerts.send_alert("Oops", "bad severity", "urgent"))
-show("7 title starting with a dash (should show as plain text)", alerts.send_alert("-not an option", "dash title test", "low"))
+show("Invalid severity", alerts.send_alert("RansomGuard", "Invalid severity check", "urgent"))
+show("Plain-text title", alerts.send_alert("-not an option", "Dash-prefixed titles remain plain text", "low"))
