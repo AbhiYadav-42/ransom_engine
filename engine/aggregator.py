@@ -134,6 +134,7 @@ class _SourceState:
         self.window_5s = SlidingWindow(
             LONG_WINDOW_SECONDS, int(max_events_per_second * LONG_WINDOW_SECONDS))
         self.window_inspections = SlidingWindow(LONG_WINDOW_SECONDS, max_inspections)
+        self.window_backup = SlidingWindow(LONG_WINDOW_SECONDS, 100)   # Stage 5: backup-tool detections
 
 
 def _event_features(state):
@@ -271,6 +272,11 @@ class Aggregator:
                     continue
                 state.window_inspections.add(inspection.timestamp, record)
 
+    def note_backup_kill(self, timestamp):
+        """Stage 5: a backup-destroying command was seen. backup_kill_cmd = 1 for the next 5 s."""
+        with self._lock:
+            self._states[GLOBAL_KEY].window_backup.add(timestamp, True)
+
     def compute_features(self, now, source_key=GLOBAL_KEY):
         """One FeatureRow for one key. Unknown / idle key -> all zeros."""
         with self._lock:
@@ -344,7 +350,9 @@ class Aggregator:
             state.window_1s.prune(now)
             state.window_5s.prune(now)
             state.window_inspections.prune(now)
+            state.window_backup.prune(now)
             features = _features_from_state(state)
+            features["backup_kill_cmd"] = 1 if state.window_backup.count() > 0 else 0
         values = to_vector(features)    # fixes the column order (and checks it)
         return FeatureRow(timestamp=now, source_key=source_key, values=tuple(values))
 
