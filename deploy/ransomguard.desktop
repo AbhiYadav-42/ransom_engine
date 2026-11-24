@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=RansomGuard
+GenericName=Ransomware detection tray
+Comment=System tray status and control for the RansomGuard engine
+Exec=/media/MySpace/Programming_Files/ransom_engine/.venv/bin/python /media/MySpace/Programming_Files/ransom_engine/ui/tray_app.py
+Path=/media/MySpace/Programming_Files/ransom_engine
+Icon=ransomguard
+Terminal=false
+Categories=System;Security;
+StartupNotify=false
