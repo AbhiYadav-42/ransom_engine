@@ -1,0 +1,67 @@
+{
+  "model_file": "rf.joblib",
+  "feature_names": [
+    "events_per_sec_1s",
+    "events_per_sec_5s",
+    "distinct_files_modified",
+    "distinct_dirs_touched",
+    "rename_count",
+    "extension_change_count",
+    "modify_ratio",
+    "canary_touched",
+    "backup_kill_cmd",
+    "files_inspected",
+    "max_entropy",
+    "mean_entropy",
+    "fraction_high_entropy",
+    "mean_chi_square",
+    "max_null_fraction",
+    "header_mismatch_count",
+    "entropy_jump_count"
+  ],
+  "schema_version": "1.1",
+  "schema_fingerprint": "fb4b9b31",
+  "versions": {
+    "python": "3.14.10",
+    "numpy": "2.5.4",
+    "scikit_learn": "1.9.1",
+    "joblib": "1.6.0"
+  },
+  "threshold": 0.4637635705950232,
+  "n_estimators": 10,
+  "max_depth": 6,
+  "targets": {
+    "max_fpr": 0.01,
+    "target_recall": 0.9,
+    "met": true
+  },
+  "metrics": {
+    "tp": 958,
+    "fp": 31,
+    "tn": 1982,
+    "fn": 65,
+    "precision": 0.9686552072800809,
+    "recall": 0.9364613880742912,
+    "fpr": 0.015399900645802286
+  },
+  "fpr_active_negatives": 0.02557755775577558,
+  "ablation_velocity_only": {
+    "recall": 0.4359726295210166,
+    "fpr": 0.0
+  },
+  "metrics_apply_to_deployed_model": true,
+  "constant_columns": [
+    "canary_touched"
+  ],
+  "label_rule": "ticks from attack_start to attack_end + 5 s = 1, everything else = 0",
+  "trained_at": "2026-11-24T23:09:31.145152+00:00",
+  "dataset_sizes": {
+    "linux": {
+      "rows": 9930,
+      "runs": 640,
+      "positive_rows": 3319
+    }
+  },
+  "train_rows": 6894,
+  "test_rows": 3036
+}
