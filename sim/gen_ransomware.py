@@ -39,6 +39,12 @@ CONFIG = {
     "threaded_random_order": ("urandom", False, 0.0, (40, 120)),
     "ransom_note_drop":    ("urandom", True, 0.0, (40, 120)),
     "low_and_slow":        ("urandom", False, 4.0, (6, 8)),
+    # Approach 4: named, repeatable modes for data collection.
+    "sim_aes_inplace":     ("fernet", True, 0.0, (40, 120)),
+    "sim_partial_header":   ("partial", False, 0.0, (40, 120)),
+    "sim_copy_unlink":      ("copy_delete", False, 0.0, (40, 100)),
+    "sim_canary_backupkill": ("urandom", False, 0.0, (40, 120)),
+    "sim_slow_stealth":    ("urandom", True, 0.225, (12, 30)),
 }
 VARIANTS = list(CONFIG)
 
@@ -95,7 +101,7 @@ def run(workdir, variant, rng):
     decoy = None
     print("PHASE attack_start", flush=True)
     try:
-        if variant == "with_decoy":                        # harmless: only sleeps, words are just text
+        if variant == "with_decoy" or variant == "sim_canary_backupkill":                        # harmless: words are text, no command is executed
             decoy = subprocess.Popen(
                 [sys.executable, str(DECOY), "vssadmin", "delete", "shadows", "/all", "/quiet"],
                 stdout=subprocess.DEVNULL)

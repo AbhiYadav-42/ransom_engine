@@ -158,6 +158,8 @@ def parse_args():
     parser.add_argument("--os-tag", default="windows" if sys.platform == "win32" else "linux")
     parser.add_argument("--repeats", type=int, default=2, help="runs per variant")
     parser.add_argument("--kinds", choices=["both", "benign", "ransomware"], default="both")
+    parser.add_argument("--variants", nargs="+", default=None,
+                        help="collect only named variants (for example sim_slow_stealth)")
     parser.add_argument("--tick", type=float, default=1.0)
     parser.add_argument("--label-tail", type=float, default=5.0)
     parser.add_argument("--timeout", type=float, default=120.0, help="seconds per generator run")
@@ -171,9 +173,22 @@ def main():
     args = parse_args()
     plan = []
     if args.kinds in ("both", "ransomware"):
-        plan += [("ransomware", v) for v in gen_ransomware.VARIANTS]
+        ransomware_variants = gen_ransomware.VARIANTS
+        if args.variants:
+            requested = set(args.variants)
+            ransomware_variants = [v for v in ransomware_variants if v in requested]
+        plan += [("ransomware", v) for v in ransomware_variants]
     if args.kinds in ("both", "benign"):
-        plan += [("benign", v) for v in gen_benign.VARIANTS]
+        benign_variants = gen_benign.VARIANTS
+        if args.variants:
+            requested = set(args.variants)
+            benign_variants = [v for v in benign_variants if v in requested]
+        plan += [("benign", v) for v in benign_variants]
+    if args.variants:
+        all_known = set(gen_ransomware.VARIANTS) | set(gen_benign.VARIANTS)
+        unknown = set(args.variants) - all_known
+        if unknown:
+            raise SystemExit("unknown variants: %s" % ", ".join(sorted(unknown)))
     plan = plan * args.repeats
     random.Random(args.seed).shuffle(plan)
     print("%d runs planned (roughly %d-%d minutes)" % (len(plan), len(plan) // 3, len(plan) // 2 + 1))
