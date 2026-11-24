@@ -28,6 +28,7 @@ models/*
 # Local data
 data/*
 !data/.gitkeep
+!data/*.csv
 
 # Sandbox files
 sandbox/*
